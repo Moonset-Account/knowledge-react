@@ -85,6 +85,32 @@ export async function PUT(
       return NextResponse.json({ error: '别名已存在，请使用其他别名' }, { status: 400 });
     }
 
+    const maxVersion = await prisma.documentVersion.aggregate({
+      where: { documentId: id },
+      _max: { version: true },
+    });
+
+    const nextVersion = (maxVersion._max.version || 0) + 1;
+
+    const existingTagIds = existingDoc.tags.map((t) => t.tagId);
+    const existingRoleIds = existingDoc.accessRoles.map((r) => r.id);
+
+    await prisma.documentVersion.create({
+      data: {
+        documentId: id,
+        version: nextVersion,
+        title: existingDoc.title,
+        content: existingDoc.content,
+        excerpt: existingDoc.excerpt,
+        slug: existingDoc.slug,
+        categoryId: existingDoc.categoryId,
+        published: existingDoc.published,
+        tagIds: JSON.stringify(existingTagIds),
+        roleIds: JSON.stringify(existingRoleIds),
+        authorId: user.id,
+      },
+    });
+
     const updatedDocument = await prisma.document.update({
       where: { id },
       data: {
@@ -113,7 +139,7 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json({ document: updatedDocument });
+    return NextResponse.json({ document: updatedDocument, version: nextVersion });
   } catch (error) {
     console.error('更新文章失败:', error);
     return NextResponse.json({ error: '更新文章失败' }, { status: 500 });

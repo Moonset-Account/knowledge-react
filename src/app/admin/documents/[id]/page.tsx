@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { generateSlug } from '@/lib/utils';
+import { VersionHistory } from '@/components/VersionHistory';
 
 interface Category {
   id: string;
@@ -252,13 +253,33 @@ export default function EditDocumentPage({ params }: EditDocumentPageProps) {
           <h1 className="text-2xl font-bold text-text-primary mb-2">编辑文章</h1>
           <p className="text-text-secondary">修改文章内容和设置</p>
         </div>
-        <button
-          onClick={handleDelete}
-          disabled={isSaving}
-          className="px-4 py-2 text-danger border border-danger/30 rounded-lg hover:bg-danger/10 transition-colors disabled:opacity-50"
-        >
-          删除文章
-        </button>
+        <div className="flex items-center gap-3">
+          {documentId && (
+            <VersionHistory
+              documentId={documentId}
+              onRollback={(version) => {
+                setFormData({
+                  title: version.title,
+                  slug: version.slug,
+                  content: version.content || '',
+                  excerpt: version.excerpt || '',
+                  categoryId: version.categoryId || '',
+                  published: version.published,
+                  selectedTags: JSON.parse(version.tagIds || '[]'),
+                  selectedRoles: JSON.parse(version.roleIds || '[]'),
+                });
+                setSuccess(`已回滚到版本 ${version.version}，请保存更改`);
+              }}
+            />
+          )}
+          <button
+            onClick={handleDelete}
+            disabled={isSaving}
+            className="px-4 py-2 text-danger border border-danger/30 rounded-lg hover:bg-danger/10 transition-colors disabled:opacity-50"
+          >
+            删除文章
+          </button>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="max-w-4xl">

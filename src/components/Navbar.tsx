@@ -48,12 +48,32 @@ export async function Navbar() {
               >
                 搜索
               </Link>
+              <Link
+                href="/feedback"
+                className="text-text-secondary hover:text-primary transition-colors"
+              >
+                提交反馈
+              </Link>
             </div>
           </div>
 
           <div className="flex items-center space-x-4">
             {session?.user ? (
               <div className="flex items-center space-x-4">
+                <Link
+                  href="/bookmarks"
+                  className="text-text-secondary hover:text-primary transition-colors flex items-center gap-1"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+                    />
+                  </svg>
+                  我的收藏
+                </Link>
                 {session.user.role === 'ADMIN' && (
                   <Link
                     href="/admin"

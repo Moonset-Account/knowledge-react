@@ -1,9 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import { canAccessDocument } from '@/lib/auth';
+import { canAccessDocument, getCurrentUser } from '@/lib/auth';
 import { formatDate, formatDateTime } from '@/lib/utils';
 import { Metadata } from 'next';
+import { CommentSection } from '@/components/CommentSection';
+import { DocumentInteraction } from '@/components/DocumentInteraction';
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -50,7 +52,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function DocumentPage({ params }: Props) {
   const { slug } = await params;
-  const document = await getDocument(slug);
+  const [document, currentUser] = await Promise.all([
+    getDocument(slug),
+    getCurrentUser(),
+  ]);
 
   if (!document) {
     notFound();
@@ -93,6 +98,8 @@ export default async function DocumentPage({ params }: Props) {
     );
   }
 
+  const isAuthenticated = !!currentUser;
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
       <article className="bg-surface rounded-xl border border-border overflow-hidden">
@@ -122,7 +129,7 @@ export default async function DocumentPage({ params }: Props) {
               {document.title}
             </h1>
 
-            <div className="flex flex-wrap items-center gap-4 text-sm text-text-secondary">
+            <div className="flex flex-wrap items-center gap-4 text-sm text-text-secondary mb-6">
               {document.author && (
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
@@ -137,6 +144,8 @@ export default async function DocumentPage({ params }: Props) {
               <span>最后更新于 {formatDateTime(document.updatedAt)}</span>
               <span>{document.viewCount} 次阅读</span>
             </div>
+
+            <DocumentInteraction documentId={document.id} isAuthenticated={isAuthenticated} />
           </header>
 
           {document.excerpt && (
@@ -154,6 +163,8 @@ export default async function DocumentPage({ params }: Props) {
           )}
         </div>
       </article>
+
+      <CommentSection documentId={document.id} isAuthenticated={isAuthenticated} />
 
       <div className="mt-8 flex justify-between">
         <Link
