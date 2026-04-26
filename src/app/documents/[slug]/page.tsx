@@ -6,6 +6,7 @@ import { formatDate, formatDateTime } from '@/lib/utils';
 import { Metadata } from 'next';
 import { CommentSection } from '@/components/CommentSection';
 import { DocumentInteraction } from '@/components/DocumentInteraction';
+import { DocumentContent } from '@/components/DocumentContent';
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -101,68 +102,26 @@ export default async function DocumentPage({ params }: Props) {
   const isAuthenticated = !!currentUser;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-12">
-      <article className="bg-surface rounded-xl border border-border overflow-hidden">
-        <div className="p-8 md:p-12">
-          <header className="mb-8">
-            <div className="flex flex-wrap gap-2 mb-4">
-              {document.category && (
-                <Link
-                  href={`/documents?category=${document.category.slug}`}
-                  className="inline-block px-3 py-1 bg-primary/10 text-primary text-xs font-medium rounded-full hover:bg-primary/20 transition-colors"
-                >
-                  {document.category.name}
-                </Link>
-              )}
-              {document.tags.map((dt) => (
-                <Link
-                  key={dt.tagId}
-                  href={`/documents?tag=${dt.tag.slug}`}
-                  className="inline-block px-3 py-1 bg-secondary/10 text-secondary text-xs font-medium rounded-full hover:bg-secondary/20 transition-colors"
-                >
-                  {dt.tag.name}
-                </Link>
-              ))}
-            </div>
+    <div className="max-w-7xl mx-auto px-4 py-12">
+      <DocumentContent
+        document={{
+          id: document.id,
+          title: document.title,
+          content: document.content,
+          excerpt: document.excerpt,
+          createdAt: document.createdAt,
+          updatedAt: document.updatedAt,
+          viewCount: document.viewCount,
+          author: document.author,
+          category: document.category,
+          tags: document.tags,
+        }}
+        isAuthenticated={isAuthenticated}
+      />
 
-            <h1 className="text-3xl md:text-4xl font-bold text-text-primary mb-4">
-              {document.title}
-            </h1>
-
-            <div className="flex flex-wrap items-center gap-4 text-sm text-text-secondary mb-6">
-              {document.author && (
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                    <span className="text-primary text-sm font-medium">
-                      {document.author.name?.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <span>{document.author.name}</span>
-                </div>
-              )}
-              <span>发布于 {formatDate(document.createdAt)}</span>
-              <span>最后更新于 {formatDateTime(document.updatedAt)}</span>
-              <span>{document.viewCount} 次阅读</span>
-            </div>
-
-            <DocumentInteraction documentId={document.id} isAuthenticated={isAuthenticated} />
-          </header>
-
-          {document.excerpt && (
-            <div className="mb-8 p-4 bg-primary/5 border-l-4 border-primary rounded-r-lg">
-              <p className="text-text-secondary italic">{document.excerpt}</p>
-            </div>
-          )}
-
-          {document.content && (
-            <div className="prose max-w-none">
-              <pre className="whitespace-pre-wrap font-mono text-sm bg-background p-6 rounded-lg">
-                {document.content}
-              </pre>
-            </div>
-          )}
-        </div>
-      </article>
+      <div className="mt-6">
+        <DocumentInteraction documentId={document.id} isAuthenticated={isAuthenticated} />
+      </div>
 
       <CommentSection documentId={document.id} isAuthenticated={isAuthenticated} />
 

@@ -43,7 +43,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           id: user.id,
           name: user.name,
           email: user.email,
-          image: user.image,
           role: user.role?.name,
           roleId: user.roleId,
         };
@@ -62,6 +61,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id;
         token.role = (user as any).role;
         token.roleId = (user as any).roleId;
+        token.name = user.name;
+      }
+
+      if (token.id) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { name: true, roleId: true, role: { select: { name: true } } },
+        });
+        if (dbUser) {
+          token.name = dbUser.name;
+          token.role = dbUser.role?.name;
+          token.roleId = dbUser.roleId;
+        }
       }
       return token;
     },
@@ -70,6 +82,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.id as string;
         session.user.role = token.role as string;
         session.user.roleId = token.roleId as string;
+        session.user.name = token.name;
       }
       return session;
     },

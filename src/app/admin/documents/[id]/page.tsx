@@ -1,9 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { generateSlug } from '@/lib/utils';
 import { VersionHistory } from '@/components/VersionHistory';
+import MDEditor from '@uiw/react-md-editor';
+import rehypeHighlight from 'rehype-highlight';
+import remarkGfm from 'remark-gfm';
 
 interface Category {
   id: string;
@@ -221,6 +224,10 @@ export default function EditDocumentPage({ params }: EditDocumentPageProps) {
     }));
   };
 
+  const handleContentChange = useCallback((value?: string) => {
+    setFormData((prev) => ({ ...prev, content: value || '' }));
+  }, []);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -282,7 +289,7 @@ export default function EditDocumentPage({ params }: EditDocumentPageProps) {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="max-w-4xl">
+      <form onSubmit={handleSubmit} className="max-w-6xl">
         {success && (
           <div className="mb-6 p-4 bg-success/10 border border-success/20 rounded-lg text-success text-sm">
             {success}
@@ -358,15 +365,19 @@ export default function EditDocumentPage({ params }: EditDocumentPageProps) {
               >
                 内容 (Markdown)
               </label>
-              <textarea
-                id="content"
-                name="content"
-                value={formData.content}
-                onChange={handleChange}
-                rows={20}
-                placeholder="使用 Markdown 格式编写文章内容..."
-                className="w-full px-4 py-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-colors bg-background font-mono text-sm resize-vertical"
-              />
+              <div className="w-full">
+                <MDEditor
+                  value={formData.content}
+                  onChange={handleContentChange}
+                  height={600}
+                  preview="live"
+                  textareaProps={{
+                    name: 'content',
+                    id: 'content',
+                    placeholder: '使用 Markdown 格式编写文章内容...',
+                  }}
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

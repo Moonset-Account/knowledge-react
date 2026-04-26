@@ -111,15 +111,19 @@ export async function POST(
 
         const document = await prisma.document.findUnique({
             where: { id },
+            select: { id: true, title: true, slug: true, authorId: true },
         });
 
         if (!document) {
             return NextResponse.json({ error: '文档不存在' }, { status: 404 });
         }
 
+        let parentComment: { id: string; userId: string; content: string; documentId: string } | null = null;
+
         if (parentId) {
-            const parentComment = await prisma.comment.findUnique({
+            parentComment = await prisma.comment.findUnique({
                 where: { id: parentId },
+                select: { id: true, userId: true, content: true, documentId: true },
             });
 
             if (!parentComment) {
@@ -143,6 +147,60 @@ export async function POST(
                 _count: { select: { likes: true } },
             },
         });
+
+        const notifications: Promise<any>[] = [];
+
+        if (document.authorId && document.authorId !== user.id) {
+            notifications.push(
+                prisma.notification.create({
+                    data: {
+                        userId: document.authorId,
+                        type: parentId ? 'REPLY' : 'COMMENT',
+                        isRead: false,
+                        data: JSON.stringify({
+                            documentId: document.id,
+                            documentTitle: document.title,
+                            documentSlug: document.slug,
+                            commentId: comment.id,
+                            commentContent: content.trim(),
+                            commenterId: user.id,
+                            commenterName: user.name || user.email,
+                            parentCommentId: parentId || null,
+                            parentCommentContent: parentComment?.content || null,
+                            parentCommenterId: parentComment?.userId || null,
+                        }),
+                    },
+                })
+            );
+        }
+
+        if (parentComment && parentComment.userId !== user.id && parentComment.userId !== document.authorId) {
+            notifications.push(
+                prisma.notification.create({
+                    data: {
+                        userId: parentComment.userId,
+                        type: 'REPLY',
+                        isRead: false,
+                        data: JSON.stringify({
+                            documentId: document.id,
+                            documentTitle: document.title,
+                            documentSlug: document.slug,
+                            commentId: comment.id,
+                            commentContent: content.trim(),
+                            commenterId: user.id,
+                            commenterName: user.name || user.email,
+                            parentCommentId: parentComment.id,
+                            parentCommentContent: parentComment.content,
+                            parentCommenterId: parentComment.userId,
+                        }),
+                    },
+                })
+            );
+        }
+
+        if (notifications.length > 0) {
+            await Promise.all(notifications);
+        }
 
         return NextResponse.json({
             comment: {

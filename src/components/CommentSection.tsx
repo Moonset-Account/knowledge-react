@@ -281,10 +281,18 @@ function CommentItem({
   return (
     <div className="border-b border-border last:border-b-0 pb-6 last:pb-0">
       <div className="flex gap-4">
-        <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-          <span className="text-primary text-sm font-medium">
-            {comment.user.name?.charAt(0).toUpperCase() || 'U'}
-          </span>
+        <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
+          {comment.user.image ? (
+            <img
+              src={comment.user.image}
+              alt="头像"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <span className="text-primary text-sm font-medium">
+              {comment.user.name?.charAt(0).toUpperCase() || 'U'}
+            </span>
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-2">

@@ -1,9 +1,17 @@
 import Link from 'next/link';
 import { auth } from '@/auth';
-import { signOut } from '@/auth';
+import { getCurrentUser } from '@/lib/auth';
+import { NotificationBell } from './NotificationBell';
+import { LogoutButton } from './LogoutButton';
 
 export async function Navbar() {
   const session = await auth();
+  const currentUser = await getCurrentUser();
+
+  const isAdmin = session?.user?.role === 'ADMIN';
+  const userName = currentUser?.name || session?.user?.name;
+  const userEmail = session?.user?.email;
+  const userImage = currentUser?.image;
 
   return (
     <nav className="bg-surface border-b border-border sticky top-0 z-50 shadow-sm">
@@ -74,7 +82,10 @@ export async function Navbar() {
                   </svg>
                   我的收藏
                 </Link>
-                {session.user.role === 'ADMIN' && (
+
+                <NotificationBell />
+
+                {isAdmin && (
                   <Link
                     href="/admin"
                     className="text-text-secondary hover:text-primary transition-colors"
@@ -82,22 +93,30 @@ export async function Navbar() {
                     管理后台
                   </Link>
                 )}
-                <span className="text-text-secondary text-sm">
-                  {session.user.name || session.user.email}
-                </span>
-                <form
-                  action={async () => {
-                    'use server';
-                    await signOut({ redirectTo: '/' });
-                  }}
+
+                <Link
+                  href="/profile"
+                  className="flex items-center gap-2 text-text-secondary hover:text-primary transition-colors"
                 >
-                  <button
-                    type="submit"
-                    className="px-4 py-2 text-sm font-medium text-text-secondary hover:text-danger transition-colors"
-                  >
-                    退出
-                  </button>
-                </form>
+                  <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center overflow-hidden">
+                    {userImage ? (
+                      <img
+                        src={userImage}
+                        alt="头像"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-primary text-sm font-medium">
+                        {userName?.charAt(0).toUpperCase() || userEmail?.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-sm hidden sm:inline">
+                    {userName || userEmail}
+                  </span>
+                </Link>
+
+                <LogoutButton />
               </div>
             ) : (
               <div className="flex items-center space-x-4">
