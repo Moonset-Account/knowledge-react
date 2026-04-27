@@ -20,15 +20,17 @@ interface Comment {
   user: User;
   likeCount: number;
   isLiked: boolean;
+  isDeleted?: boolean;
   replies?: Comment[];
 }
 
 interface CommentSectionProps {
   documentId: string;
   isAuthenticated: boolean;
+  currentUserId?: string;
 }
 
-export function CommentSection({ documentId, isAuthenticated }: CommentSectionProps) {
+export function CommentSection({ documentId, isAuthenticated, currentUserId }: CommentSectionProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
@@ -37,18 +39,20 @@ export function CommentSection({ documentId, isAuthenticated }: CommentSectionPr
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchComments = async () => {
     try {
       const res = await fetch(`/api/documents/${documentId}/comments?page=${page}&limit=20`);
       if (res.ok) {
         const data = await res.json();
+        const filteredComments = data.comments?.filter((c: Comment) => !c.isDeleted) || [];
         if (page === 1) {
-          setComments(data.comments);
+          setComments(filteredComments);
         } else {
-          setComments((prev) => [...prev, ...data.comments]);
+          setComments((prev) => [...prev, ...filteredComments]);
         }
-        setTotal(data.total);
+        setTotal(data.total || 0);
       }
     } catch (err) {
       setError('加载评论失败');
@@ -121,6 +125,46 @@ export function CommentSection({ documentId, isAuthenticated }: CommentSectionPr
       setError('发布回复失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string, isReply: boolean = false, parentCommentId?: string) => {
+    if (!confirm('确定要删除这条评论吗？')) {
+      return;
+    }
+
+    setDeletingId(commentId);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/comments/${commentId}`, {
+        method: 'DELETE',
+      });
+
+      if (res.ok) {
+        if (isReply && parentCommentId) {
+          setComments((prev) =>
+            prev.map((c) =>
+              c.id === parentCommentId
+                ? {
+                    ...c,
+                    replies: (c.replies || []).filter((r) => r.id !== commentId),
+                  }
+                : c
+            )
+          );
+        } else {
+          setComments((prev) => prev.filter((c) => c.id !== commentId));
+          setTotal((prev) => Math.max(0, prev - 1));
+        }
+      } else {
+        const errorData = await res.json();
+        setError(errorData.error || '删除评论失败');
+      }
+    } catch (err) {
+      setError('删除评论失败');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -219,11 +263,13 @@ export function CommentSection({ documentId, isAuthenticated }: CommentSectionPr
                 key={comment.id}
                 comment={comment}
                 isAuthenticated={isAuthenticated}
+                currentUserId={currentUserId}
                 onLike={handleLikeComment}
                 onReplyStart={(id) => {
                   setReplyingTo(id);
                   setReplyContent('');
                 }}
+                onDelete={handleDeleteComment}
                 replyingTo={replyingTo}
                 replyContent={replyContent}
                 onReplyChange={setReplyContent}
@@ -233,6 +279,7 @@ export function CommentSection({ documentId, isAuthenticated }: CommentSectionPr
                   setReplyContent('');
                 }}
                 loading={loading}
+                deletingId={deletingId}
               />
             ))
           )}
@@ -256,28 +303,37 @@ export function CommentSection({ documentId, isAuthenticated }: CommentSectionPr
 interface CommentItemProps {
   comment: Comment;
   isAuthenticated: boolean;
+  currentUserId?: string;
   onLike: (id: string, isReply: boolean) => void;
   onReplyStart: (id: string) => void;
+  onDelete: (id: string, isReply: boolean, parentCommentId?: string) => void;
   replyingTo: string | null;
   replyContent: string;
   onReplyChange: (val: string) => void;
   onSubmitReply: (id: string) => void;
   onCancelReply: () => void;
   loading: boolean;
+  deletingId: string | null;
 }
 
 function CommentItem({
   comment,
   isAuthenticated,
+  currentUserId,
   onLike,
   onReplyStart,
+  onDelete,
   replyingTo,
   replyContent,
   onReplyChange,
   onSubmitReply,
   onCancelReply,
   loading,
+  deletingId,
 }: CommentItemProps) {
+  const canDelete = currentUserId === comment.userId;
+  const isDeleting = deletingId === comment.id;
+
   return (
     <div className="border-b border-border last:border-b-0 pb-6 last:pb-0">
       <div className="flex gap-4">
@@ -339,6 +395,15 @@ function CommentItem({
                 回复
               </button>
             )}
+            {isAuthenticated && canDelete && (
+              <button
+                onClick={() => onDelete(comment.id, false)}
+                disabled={isDeleting}
+                className="text-danger hover:text-danger-hover transition-colors disabled:opacity-50"
+              >
+                {isDeleting ? '删除中...' : '删除'}
+              </button>
+            )}
           </div>
 
           {replyingTo === comment.id && (
@@ -373,7 +438,7 @@ function CommentItem({
 
       {comment.replies && comment.replies.length > 0 && (
         <div className="ml-14 mt-4 space-y-4">
-          {comment.replies.map((reply) => (
+          {comment.replies.filter(r => !r.isDeleted).map((reply) => (
             <div key={reply.id} className="flex gap-3">
               <div className="w-8 h-8 bg-secondary/10 rounded-full flex items-center justify-center flex-shrink-0">
                 <span className="text-secondary text-xs font-medium">
@@ -392,30 +457,41 @@ function CommentItem({
                 <p className="text-text-primary text-sm whitespace-pre-wrap break-words mb-2">
                   {reply.content}
                 </p>
-                <button
-                  onClick={() => onLike(reply.id, true)}
-                  disabled={!isAuthenticated}
-                  className={`flex items-center gap-1 text-xs transition-colors ${
-                    reply.isLiked
-                      ? 'text-primary'
-                      : 'text-text-secondary hover:text-primary'
-                  } ${!isAuthenticated ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <svg
-                    className="w-3 h-3"
-                    fill={reply.isLiked ? 'currentColor' : 'none'}
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+                <div className="flex items-center gap-4 text-xs">
+                  <button
+                    onClick={() => onLike(reply.id, true)}
+                    disabled={!isAuthenticated}
+                    className={`flex items-center gap-1 transition-colors ${
+                      reply.isLiked
+                        ? 'text-primary'
+                        : 'text-text-secondary hover:text-primary'
+                    } ${!isAuthenticated ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                    />
-                  </svg>
-                  <span>{reply.likeCount}</span>
-                </button>
+                    <svg
+                      className="w-3 h-3"
+                      fill={reply.isLiked ? 'currentColor' : 'none'}
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                      />
+                    </svg>
+                    <span>{reply.likeCount}</span>
+                  </button>
+                  {isAuthenticated && currentUserId === reply.userId && (
+                    <button
+                      onClick={() => onDelete(reply.id, true, comment.id)}
+                      disabled={deletingId === reply.id}
+                      className="text-danger hover:text-danger-hover transition-colors disabled:opacity-50"
+                    >
+                      {deletingId === reply.id ? '删除中...' : '删除'}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { auth } from '@/auth';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, hasPermission, PERMISSIONS } from '@/lib/auth';
 import { NotificationBell } from './NotificationBell';
 import { LogoutButton } from './LogoutButton';
 
@@ -8,7 +8,8 @@ export async function Navbar() {
   const session = await auth();
   const currentUser = await getCurrentUser();
 
-  const isAdmin = session?.user?.role === 'ADMIN';
+  const canAccessAdmin = await hasPermission(PERMISSIONS.ADMIN_DASHBOARD, currentUser);
+  const canCreateDocuments = await hasPermission(PERMISSIONS.CREATE_DOCUMENTS, currentUser);
   const userName = currentUser?.name || session?.user?.name;
   const userEmail = session?.user?.email;
   const userImage = currentUser?.image;
@@ -85,12 +86,28 @@ export async function Navbar() {
 
                 <NotificationBell />
 
-                {isAdmin && (
+                {canAccessAdmin && (
                   <Link
                     href="/admin"
                     className="text-text-secondary hover:text-primary transition-colors"
                   >
                     管理后台
+                  </Link>
+                )}
+                {canCreateDocuments && !canAccessAdmin && (
+                  <Link
+                    href="/admin/documents"
+                    className="text-text-secondary hover:text-primary transition-colors flex items-center gap-1"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 4v16m8-8H4"
+                      />
+                    </svg>
+                    发布文章
                   </Link>
                 )}
 

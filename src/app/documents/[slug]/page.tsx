@@ -62,10 +62,6 @@ export default async function DocumentPage({ params }: Props) {
     notFound();
   }
 
-  if (!document.published) {
-    notFound();
-  }
-
   const hasAccess = await canAccessDocument(document.id);
   if (!hasAccess) {
     return (
@@ -123,7 +119,11 @@ export default async function DocumentPage({ params }: Props) {
         <DocumentInteraction documentId={document.id} isAuthenticated={isAuthenticated} />
       </div>
 
-      <CommentSection documentId={document.id} isAuthenticated={isAuthenticated} />
+      <CommentSection 
+        documentId={document.id} 
+        isAuthenticated={isAuthenticated}
+        currentUserId={currentUser?.id}
+      />
 
       <div className="mt-8 flex justify-between">
         <Link

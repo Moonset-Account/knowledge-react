@@ -1,6 +1,5 @@
 generator client {
-provider = "prisma-client-js"
-
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -9,19 +8,19 @@ datasource db {
 }
 
 model User {
-  id            String          @id @default(cuid())
+  id            String            @id @default(cuid())
   name          String?
-  email         String          @unique
+  email         String            @unique
   emailVerified DateTime?
   password      String?
   image         String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
   roleId        String?
-  role          Role?           @relation(fields: [roleId], references: [id])
+  role          Role?             @relation(fields: [roleId], references: [id])
   accounts      Account[]
   sessions      Session[]
-  documents     Document[]      @relation("DocumentAuthor")
+  documents     Document[]        @relation("DocumentAuthor")
   versions      DocumentVersion[]
   bookmarks     Bookmark[]
   comments      Comment[]
@@ -59,32 +58,36 @@ model Category {
 }
 
 model Tag {
-  id        String     @id @default(cuid())
-  name      String     @unique
-  slug      String     @unique
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id        String        @id @default(cuid())
+  name      String        @unique
+  slug      String        @unique
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
   documents DocumentTag[]
 
   @@map("tags")
 }
 
 model Document {
-  id          String          @id @default(cuid())
+  id          String            @id @default(cuid())
   title       String
-  slug        String          @unique
+  slug        String            @unique
   content     String?
   excerpt     String?
-  published   Boolean         @default(false)
-  viewCount   Int             @default(0)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  published   Boolean           @default(false)
+  viewCount   Int               @default(0)
+  status      String            @default("DRAFT")
+  reviewNote  String?
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
   authorId    String?
   categoryId  String?
-  author      User?           @relation("DocumentAuthor", fields: [authorId], references: [id])
-  category    Category?       @relation(fields: [categoryId], references: [id])
+  author      User?             @relation("DocumentAuthor", fields: [authorId], references: [id])
+  category    Category?         @relation(fields: [categoryId], references: [id])
   tags        DocumentTag[]
-  accessRoles Role[]          @relation("DocumentRoleAccess")
+  accessRoles Role[]            @relation("DocumentRoleAccess")
   versions    DocumentVersion[]
   bookmarks   Bookmark[]
   comments    Comment[]
@@ -142,112 +145,135 @@ model VerificationToken {
 }
 
 model DocumentVersion {
-  id          String    @id @default(cuid())
-  documentId  String
-  version     Int
-  title       String
-  content     String?
-  excerpt     String?
-  slug        String
-  categoryId  String?
-  published   Boolean   @default(false)
-  tagIds      String    @default("[]")
-  roleIds     String    @default("[]")
-  diff        String?
-  createdAt   DateTime  @default(now())
-  authorId    String?
+  id         String   @id @default(cuid())
+  documentId String
+  version    Int
+  title      String
+  content    String?
+  excerpt    String?
+  slug       String
+  categoryId String?
+  published  Boolean  @default(false)
+  tagIds     String   @default("[]")
+  roleIds    String   @default("[]")
+  diff       String?
+  createdAt  DateTime @default(now())
+  authorId   String?
 
-  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  author      User?     @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  author   User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
 
   @@unique([documentId, version])
   @@map("document_versions")
 }
 
 model Bookmark {
-  id          String    @id @default(cuid())
-  userId      String
-  documentId  String
-  createdAt   DateTime  @default(now())
+  id         String   @id @default(cuid())
+  userId     String
+  documentId String
+  createdAt  DateTime @default(now())
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([userId, documentId])
   @@map("bookmarks")
 }
 
 model Comment {
-  id          String    @id @default(cuid())
-  content     String
-  documentId  String
-  userId      String
-  parentId    String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id         String    @id @default(cuid())
+  content    String
+  documentId String
+  userId     String
+  parentId   String?
+  isDeleted  Boolean   @default(false)
+  deletedBy  String?
+  deletedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
-  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parent      Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies     Comment[] @relation("CommentReplies")
-  likes       CommentLike[]
+  document Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent   Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  Comment[]     @relation("CommentReplies")
+  likes    CommentLike[]
 
   @@map("comments")
 }
 
 model DocumentLike {
-  id          String    @id @default(cuid())
-  userId      String
-  documentId  String
-  createdAt   DateTime  @default(now())
+  id         String   @id @default(cuid())
+  userId     String
+  documentId String
+  createdAt  DateTime @default(now())
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([userId, documentId])
   @@map("document_likes")
 }
 
 model CommentLike {
-  id          String    @id @default(cuid())
-  userId      String
-  commentId   String
-  createdAt   DateTime  @default(now())
+  id        String   @id @default(cuid())
+  userId    String
+  commentId String
+  createdAt DateTime @default(now())
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  comment     Comment   @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
 
   @@unique([userId, commentId])
   @@map("comment_likes")
 }
 
 model Feedback {
-  id          String    @id @default(cuid())
-  userId      String?
-  type        String
-  title       String
-  content     String
-  status      String    @default("pending")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  userId    String?
+  type      String
+  title     String
+  content   String
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@map("feedbacks")
 }
 
 model Notification {
-  id          String    @id @default(cuid())
-  userId      String
-  type        String
-  isRead      Boolean   @default(false)
-  data        String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  isRead    Boolean  @default(false)
+  data      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([createdAt])
   @@map("notifications")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  entityType String
+  entityId   String?
+  userId     String?
+  userName   String?
+  userRole   String?
+  details    String?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([action])
+  @@index([entityType])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

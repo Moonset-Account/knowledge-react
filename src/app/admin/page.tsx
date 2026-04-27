@@ -3,23 +3,39 @@ import { prisma } from '@/lib/prisma';
 import { formatDateTime } from '@/lib/utils';
 
 async function getStats() {
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
   const [
     totalDocuments,
     publishedDocuments,
     draftDocuments,
+    pendingReviewDocuments,
+    approvedDocuments,
+    rejectedDocuments,
     totalCategories,
     totalTags,
     totalUsers,
     totalViews,
+    totalComments,
     recentDocuments,
+    recentComments,
+    topCategories,
+    documentStatsByStatus,
+    newUsersLast7Days,
+    newDocumentsLast7Days,
   ] = await Promise.all([
     prisma.document.count(),
     prisma.document.count({ where: { published: true } }),
-    prisma.document.count({ where: { published: false } }),
+    prisma.document.count({ where: { status: 'DRAFT' } }),
+    prisma.document.count({ where: { status: 'PENDING_REVIEW' } }),
+    prisma.document.count({ where: { status: 'APPROVED' } }),
+    prisma.document.count({ where: { status: 'REJECTED' } }),
     prisma.category.count(),
     prisma.tag.count(),
     prisma.user.count(),
     prisma.document.aggregate({ _sum: { viewCount: true } }),
+    prisma.comment.count({ where: { isDeleted: false } }),
     prisma.document.findMany({
       include: {
         author: { select: { name: true } },
@@ -28,17 +44,52 @@ async function getStats() {
       orderBy: { createdAt: 'desc' },
       take: 5,
     }),
+    prisma.comment.findMany({
+      where: { isDeleted: false },
+      include: {
+        user: { select: { name: true, image: true } },
+        document: { select: { title: true, slug: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    }),
+    prisma.category.findMany({
+      include: {
+        _count: { select: { documents: true } },
+      },
+      orderBy: { documents: { _count: 'desc' } },
+      take: 5,
+    }),
+    prisma.document.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    }),
+    prisma.user.count({
+      where: { createdAt: { gte: sevenDaysAgo } },
+    }),
+    prisma.document.count({
+      where: { createdAt: { gte: sevenDaysAgo } },
+    }),
   ]);
 
   return {
     totalDocuments,
     publishedDocuments,
     draftDocuments,
+    pendingReviewDocuments,
+    approvedDocuments,
+    rejectedDocuments,
     totalCategories,
     totalTags,
     totalUsers,
     totalViews: totalViews._sum.viewCount || 0,
+    totalComments,
     recentDocuments,
+    recentComments,
+    topCategories,
+    documentStatsByStatus,
+    newUsersLast7Days,
+    newDocumentsLast7Days,
   };
 }
 
@@ -57,6 +108,7 @@ const statsCards = [
       </svg>
     ),
     color: 'primary',
+    link: '/admin/documents',
   },
   {
     label: '已发布',
@@ -72,51 +124,23 @@ const statsCards = [
       </svg>
     ),
     color: 'success',
+    link: '/admin/documents?status=PUBLISHED',
   },
   {
-    label: '草稿',
-    key: 'draftDocuments',
+    label: '待审核',
+    key: 'pendingReviewDocuments',
     icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeWidth={2}
-          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
         />
       </svg>
     ),
     color: 'warning',
-  },
-  {
-    label: '分类数',
-    key: 'totalCategories',
-    icon: (
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-        />
-      </svg>
-    ),
-    color: 'primary',
-  },
-  {
-    label: '标签数',
-    key: 'totalTags',
-    icon: (
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-        />
-      </svg>
-    ),
-    color: 'primary',
+    link: '/admin/documents?status=PENDING_REVIEW',
   },
   {
     label: '用户数',
@@ -132,6 +156,23 @@ const statsCards = [
       </svg>
     ),
     color: 'primary',
+    link: '/admin/users',
+  },
+  {
+    label: '评论数',
+    key: 'totalComments',
+    icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+        />
+      </svg>
+    ),
+    color: 'primary',
+    link: '/admin/comments',
   },
   {
     label: '总阅读量',
@@ -153,6 +194,7 @@ const statsCards = [
       </svg>
     ),
     color: 'primary',
+    link: null,
   },
 ];
 
@@ -163,8 +205,43 @@ const colorClasses: Record<string, string> = {
   danger: 'bg-danger/10 text-danger',
 };
 
+const getStatusLabel = (status: string) => {
+  const labels: Record<string, string> = {
+    DRAFT: '草稿',
+    PENDING_REVIEW: '待审核',
+    APPROVED: '已通过',
+    REJECTED: '已拒绝',
+    PUBLISHED: '已发布',
+  };
+  return labels[status] || status;
+};
+
+const getStatusBadgeClass = (status: string, published: boolean) => {
+  if (published && status !== 'PUBLISHED') {
+    return 'bg-primary/10 text-primary';
+  }
+  const classes: Record<string, string> = {
+    DRAFT: 'bg-gray-100 text-gray-600',
+    PENDING_REVIEW: 'bg-warning/10 text-warning',
+    APPROVED: 'bg-success/10 text-success',
+    REJECTED: 'bg-danger/10 text-danger',
+    PUBLISHED: 'bg-primary/10 text-primary',
+  };
+  return classes[status] || 'bg-gray-100 text-gray-600';
+};
+
 export default async function AdminDashboard() {
   const stats = await getStats();
+
+  const statusChartData = [
+    { status: '草稿', count: stats.draftDocuments, color: 'bg-gray-500' },
+    { status: '待审核', count: stats.pendingReviewDocuments, color: 'bg-warning' },
+    { status: '已通过', count: stats.approvedDocuments, color: 'bg-success' },
+    { status: '已拒绝', count: stats.rejectedDocuments, color: 'bg-danger' },
+    { status: '已发布', count: stats.publishedDocuments, color: 'bg-primary' },
+  ];
+
+  const totalForChart = statusChartData.reduce((sum, item) => sum + item.count, 0);
 
   return (
     <div>
@@ -173,7 +250,7 @@ export default async function AdminDashboard() {
         <p className="text-text-secondary">概览知识库的各项数据</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {statsCards.map((card) => (
           <div
             key={card.key}
@@ -183,6 +260,14 @@ export default async function AdminDashboard() {
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${colorClasses[card.color]}`}>
                 {card.icon}
               </div>
+              {card.link && (
+                <Link
+                  href={card.link}
+                  className="text-xs text-primary hover:underline"
+                >
+                  查看全部
+                </Link>
+              )}
             </div>
             <div className="text-3xl font-bold text-text-primary mb-1">
               {stats[card.key as keyof typeof stats]}
@@ -192,88 +277,210 @@ export default async function AdminDashboard() {
         ))}
       </div>
 
-      <div className="bg-surface rounded-xl border border-border overflow-hidden">
-        <div className="p-6 border-b border-border">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-text-primary">最近文章</h2>
-            <Link
-              href="/admin/documents"
-              className="text-sm text-primary hover:text-primary-hover transition-colors"
-            >
-              查看全部 →
-            </Link>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="bg-surface rounded-xl border border-border p-6">
+          <h2 className="text-lg font-semibold text-text-primary mb-4">文章状态统计</h2>
+          <div className="space-y-4">
+            {statusChartData.map((item) => {
+              const percentage = totalForChart > 0 ? (item.count / totalForChart) * 100 : 0;
+              return (
+                <div key={item.status}>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-text-secondary">{item.status}</span>
+                    <span className="text-text-primary font-medium">
+                      {item.count} ({percentage.toFixed(1)}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-background rounded-full h-3">
+                    <div
+                      className={`h-3 rounded-full ${item.color} transition-all duration-500`}
+                      style={{ width: `${percentage}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-background">
-              <tr>
-                <th className="text-left px-6 py-3 text-xs font-medium text-text-secondary uppercase tracking-wider">
-                  标题
-                </th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-text-secondary uppercase tracking-wider">
-                  分类
-                </th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-text-secondary uppercase tracking-wider">
-                  作者
-                </th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-text-secondary uppercase tracking-wider">
-                  状态
-                </th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-text-secondary uppercase tracking-wider">
-                  阅读量
-                </th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-text-secondary uppercase tracking-wider">
-                  创建时间
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {stats.recentDocuments.length > 0 ? (
-                stats.recentDocuments.map((doc) => (
-                  <tr key={doc.id} className="hover:bg-background/50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
+
+        <div className="bg-surface rounded-xl border border-border p-6">
+          <h2 className="text-lg font-semibold text-text-primary mb-4">热门分类</h2>
+          {stats.topCategories.length > 0 ? (
+            <div className="space-y-3">
+              {stats.topCategories.map((cat, index) => {
+                const maxCount = stats.topCategories[0]?._count.documents || 1;
+                const percentage = (cat._count.documents / maxCount) * 100;
+                const rankColors = ['bg-primary', 'bg-success', 'bg-warning'];
+                return (
+                  <div key={cat.id} className="flex items-center gap-3">
+                    <div
+                      className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white ${rankColors[index] || 'bg-gray-400'}`}
+                    >
+                      {index + 1}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-text-primary font-medium">{cat.name}</span>
+                        <span className="text-text-secondary">{cat._count.documents} 篇</span>
+                      </div>
+                      <div className="w-full bg-background rounded-full h-2">
+                        <div
+                          className="h-2 rounded-full bg-primary/60 transition-all duration-500"
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center text-text-secondary py-8">暂无分类数据</div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-surface rounded-xl border border-border overflow-hidden">
+          <div className="p-6 border-b border-border">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-text-primary">最近文章</h2>
+              <Link
+                href="/admin/documents"
+                className="text-sm text-primary hover:text-primary-hover transition-colors"
+              >
+                查看全部 →
+              </Link>
+            </div>
+          </div>
+          {stats.recentDocuments.length > 0 ? (
+            <div className="divide-y divide-border">
+              {stats.recentDocuments.map((doc) => (
+                <div key={doc.id} className="p-4 hover:bg-background/50 transition-colors">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
                       <Link
                         href={`/admin/documents/${doc.id}`}
-                        className="font-medium text-text-primary hover:text-primary transition-colors"
+                        className="font-medium text-text-primary hover:text-primary transition-colors truncate block"
                       >
                         {doc.title}
                       </Link>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-text-secondary">
-                      {doc.category?.name || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-text-secondary">
-                      {doc.author?.name || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                          doc.published
-                            ? 'bg-success/10 text-success'
-                            : 'bg-warning/10 text-warning'
-                        }`}
-                      >
-                        {doc.published ? '已发布' : '草稿'}
+                      <div className="flex items-center gap-3 mt-1 text-xs text-text-secondary">
+                        <span>{doc.category?.name || '未分类'}</span>
+                        <span>•</span>
+                        <span>{doc.author?.name || '未知作者'}</span>
+                        <span>•</span>
+                        <span>{formatDateTime(doc.createdAt)}</span>
+                      </div>
+                    </div>
+                    <span
+                      className={`ml-3 inline-flex px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${getStatusBadgeClass(doc.status as string, doc.published)}`}
+                    >
+                      {doc.published ? '已发布' : getStatusLabel(doc.status as string)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-8 text-center text-text-secondary">暂无文章</div>
+          )}
+        </div>
+
+        <div className="bg-surface rounded-xl border border-border overflow-hidden">
+          <div className="p-6 border-b border-border">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-text-primary">最近评论</h2>
+              <Link
+                href="/admin/comments"
+                className="text-sm text-primary hover:text-primary-hover transition-colors"
+              >
+                查看全部 →
+              </Link>
+            </div>
+          </div>
+          {stats.recentComments.length > 0 ? (
+            <div className="divide-y divide-border">
+              {stats.recentComments.map((comment) => (
+                <div key={comment.id} className="p-4 hover:bg-background/50 transition-colors">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-primary text-xs font-medium">
+                        {(comment.user?.name || 'U').charAt(0).toUpperCase()}
                       </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-text-secondary">
-                      {doc.viewCount}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-text-secondary">
-                      {formatDateTime(doc.createdAt)}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-text-secondary">
-                    暂无文章
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-text-primary">
+                          {comment.user?.name || '匿名用户'}
+                        </span>
+                        <span className="text-xs text-text-secondary">
+                          {formatDateTime(new Date(comment.createdAt))}
+                        </span>
+                      </div>
+                      <p className="text-sm text-text-secondary mt-1 line-clamp-2">
+                        {comment.content}
+                      </p>
+                      {comment.document && (
+                        <Link
+                          href={`/documents/${comment.document.slug}`}
+                          className="text-xs text-primary hover:underline mt-1 block"
+                        >
+                          来自文章: {comment.document.title}
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-8 text-center text-text-secondary">暂无评论</div>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-surface rounded-xl border border-border p-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-text-primary">{stats.newDocumentsLast7Days}</div>
+              <div className="text-sm text-text-secondary">近7天新增文章</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-surface rounded-xl border border-border p-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-success/10 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-text-primary">{stats.newUsersLast7Days}</div>
+              <div className="text-sm text-text-secondary">近7天新增用户</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-surface rounded-xl border border-border p-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-warning/10 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-text-primary">{stats.pendingReviewDocuments}</div>
+              <div className="text-sm text-text-secondary">待审核文章</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

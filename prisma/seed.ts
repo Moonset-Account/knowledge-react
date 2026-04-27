@@ -3,30 +3,146 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+const PERMISSIONS = {
+  READ_DOCUMENTS: 'read:documents',
+  CREATE_DOCUMENTS: 'create:documents',
+  EDIT_DOCUMENTS: 'edit:documents',
+  DELETE_DOCUMENTS: 'delete:documents',
+  PUBLISH_DOCUMENTS: 'publish:documents',
+  REVIEW_DOCUMENTS: 'review:documents',
+  READ_COMMENTS: 'read:comments',
+  CREATE_COMMENTS: 'create:comments',
+  DELETE_OWN_COMMENTS: 'delete:own_comments',
+  DELETE_ALL_COMMENTS: 'delete:all_comments',
+  READ_USERS: 'read:users',
+  CREATE_USERS: 'create:users',
+  EDIT_USERS: 'edit:users',
+  DELETE_USERS: 'delete:users',
+  READ_ROLES: 'read:roles',
+  CREATE_ROLES: 'create:roles',
+  EDIT_ROLES: 'edit:roles',
+  DELETE_ROLES: 'delete:roles',
+  READ_CATEGORIES: 'read:categories',
+  CREATE_CATEGORIES: 'create:categories',
+  EDIT_CATEGORIES: 'edit:categories',
+  DELETE_CATEGORIES: 'delete:categories',
+  READ_TAGS: 'read:tags',
+  CREATE_TAGS: 'create:tags',
+  EDIT_TAGS: 'edit:tags',
+  DELETE_TAGS: 'delete:tags',
+  READ_LOGS: 'read:logs',
+  READ_FEEDBACKS: 'read:feedbacks',
+  ADMIN_DASHBOARD: 'admin:dashboard',
+};
+
 async function main() {
   console.log('开始种子数据...');
 
   const adminRole = await prisma.role.upsert({
     where: { name: 'ADMIN' },
-    update: {},
+    update: {
+      permissions: JSON.stringify(['*']),
+      description: '超级管理员角色，拥有系统全部权限',
+    },
     create: {
       name: 'ADMIN',
-      description: '管理员角色，拥有全部权限',
+      description: '超级管理员角色，拥有系统全部权限',
       permissions: JSON.stringify(['*']),
     },
   });
 
   const userRole = await prisma.role.upsert({
     where: { name: 'USER' },
-    update: {},
+    update: {
+      description: '普通用户角色，可以浏览文章和发表评论',
+      permissions: JSON.stringify([
+        PERMISSIONS.READ_DOCUMENTS,
+        PERMISSIONS.CREATE_COMMENTS,
+        PERMISSIONS.DELETE_OWN_COMMENTS,
+      ]),
+    },
     create: {
       name: 'USER',
-      description: '普通用户角色',
-      permissions: JSON.stringify(['read:documents']),
+      description: '普通用户角色，可以浏览文章和发表评论',
+      permissions: JSON.stringify([
+        PERMISSIONS.READ_DOCUMENTS,
+        PERMISSIONS.CREATE_COMMENTS,
+        PERMISSIONS.DELETE_OWN_COMMENTS,
+      ]),
     },
   });
 
-  console.log('角色创建完成:', adminRole.name, userRole.name);
+  const editorRole = await prisma.role.upsert({
+    where: { name: 'EDITOR' },
+    update: {},
+    create: {
+      name: 'EDITOR',
+      description: '编辑者角色，可以创建、编辑和发布文章',
+      permissions: JSON.stringify([
+        PERMISSIONS.READ_DOCUMENTS,
+        PERMISSIONS.CREATE_DOCUMENTS,
+        PERMISSIONS.EDIT_DOCUMENTS,
+        PERMISSIONS.PUBLISH_DOCUMENTS,
+        PERMISSIONS.READ_COMMENTS,
+        PERMISSIONS.CREATE_COMMENTS,
+        PERMISSIONS.DELETE_OWN_COMMENTS,
+        PERMISSIONS.ADMIN_DASHBOARD,
+      ]),
+    },
+  });
+
+  const reviewerRole = await prisma.role.upsert({
+    where: { name: 'REVIEWER' },
+    update: {},
+    create: {
+      name: 'REVIEWER',
+      description: '审核员角色，可以审核文章和管理评论',
+      permissions: JSON.stringify([
+        PERMISSIONS.READ_DOCUMENTS,
+        PERMISSIONS.REVIEW_DOCUMENTS,
+        PERMISSIONS.READ_COMMENTS,
+        PERMISSIONS.DELETE_ALL_COMMENTS,
+        PERMISSIONS.ADMIN_DASHBOARD,
+      ]),
+    },
+  });
+
+  const moderatorRole = await prisma.role.upsert({
+    where: { name: 'MODERATOR' },
+    update: {},
+    create: {
+      name: 'MODERATOR',
+      description: '版主角色，可以管理评论和用户',
+      permissions: JSON.stringify([
+        PERMISSIONS.READ_DOCUMENTS,
+        PERMISSIONS.READ_COMMENTS,
+        PERMISSIONS.DELETE_ALL_COMMENTS,
+        PERMISSIONS.READ_USERS,
+        PERMISSIONS.EDIT_USERS,
+        PERMISSIONS.READ_FEEDBACKS,
+        PERMISSIONS.ADMIN_DASHBOARD,
+      ]),
+    },
+  });
+
+  const authorRole = await prisma.role.upsert({
+    where: { name: 'AUTHOR' },
+    update: {},
+    create: {
+      name: 'AUTHOR',
+      description: '作者角色，可以创建和编辑自己的文章',
+      permissions: JSON.stringify([
+        PERMISSIONS.READ_DOCUMENTS,
+        PERMISSIONS.CREATE_DOCUMENTS,
+        PERMISSIONS.EDIT_DOCUMENTS,
+        PERMISSIONS.READ_COMMENTS,
+        PERMISSIONS.CREATE_COMMENTS,
+        PERMISSIONS.DELETE_OWN_COMMENTS,
+      ]),
+    },
+  });
+
+  console.log('角色创建完成:', adminRole.name, userRole.name, editorRole.name, reviewerRole.name, moderatorRole.name, authorRole.name);
 
   const hashedAdminPassword = await bcrypt.hash('admin123', 10);
   const adminUser = await prisma.user.upsert({
